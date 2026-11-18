@@ -115,6 +115,8 @@ Deployment is split into two phases because the Snapshot X `Space` is created vi
 - **Phase 1 (scripted)** — deploy the Safe (owner = deployer EOA, threshold = 1, no module), `SeatToken`, `PrincipalManager`, and `BondingTranche`, and hand admin/reclaimer roles to the new Safe. The Space and its execution strategy are **not** created here.
 - **Phase 2 (UI + scripted finalize)** — operator creates the Space via `snapshot.box` (the wizard deploys a fresh `AvatarExecutionStrategy` or `TimelockExecutionStrategy` as part of the Space-creation tx). A small finalize script then binds the Space to `SeatToken`, enables the UI-deployed exec strategy as a Safe module, and swaps it in as the Safe's sole owner.
 
+For a condensed operator checklist, with the recorded mainnet run and the pitfalls hit during it, see [`docs/deployment-runbook.md`](docs/deployment-runbook.md).
+
 The scripts involved:
 
 - [`script/PreviewPENSystem.s.sol`](script/PreviewPENSystem.s.sol) — Phase 1 dry-run. Predicts the full address plan from the deployer, its current nonce, and `DEPLOYMENT_SALT` without broadcasting.
@@ -168,14 +170,16 @@ Open [`https://snapshot.box/#/create/snapshot-x`](https://snapshot.box/#/create/
 
 | Step | Field | Value |
 | --- | --- | --- |
-| **Profile** | Space name | `Shutter  PEN` (or your chosen display name) |
+| **Profile** | Space name | `Shutter PEN` (or your chosen display name) |
 | | Avatar / cover | Upload image in the UI ([shutter-logo](logo/shutter-pen-logo-blue-1024.png)) |
 | | Description | A perpetual endowment network (PEN) funding projects aligned with The Ethereum Cypherpunk Manifesto |
 | | External URL / socials | Website URL: shutterpen.eth.limo |
 | | Voting power symbol | `SEAT` |
 | **Network** | Space network | `Ethereum` (mainnet), matching your RPC |
 | **Strategies** | Voting strategy | `OZ Votes` — token = `deployments/<chainId>.json → seatToken` |
+| | Decimals | **`0`** — the dialog defaults to `18`, but `SeatToken` has `decimals = 0`. Left at `18`, every seat balance displays as `0.000000000000000001`. |
 | **Proposal validation** | Strategy | `Proposition power` — threshold = `1`, allowed voting strategies = the `OZ Votes` entry from the previous step |
+| | Decimals | **`0`** in this strategy's `OZ Votes` entry as well (same default of `18`) |
 | **Executions** | Strategy type | `Safe module (Zodiac)` if `TIMELOCK_ENABLED=false`, else `Timelock` |
 | | Controller address | `deployments/<chainId>.json → safe` (makes the freshly-deployed exec strategy Safe-owned from the get-go) |
 | | Quorum | `10` (`AVATAR_QUORUM`) |
@@ -188,7 +192,7 @@ Open [`https://snapshot.box/#/create/snapshot-x`](https://snapshot.box/#/create/
 | | Max voting duration | `3 days` (stored as **21600 blocks** — `MAX_VOTING_DURATION = 21600`) |
 | **Controller** | Controller | `deployments/<chainId>.json → safe` |
 
-Reference addresses (mainnet, from `.env.example`; verify against `lib/sx-evm/deployments/1.json` before use):
+Reference addresses (mainnet, from `.env.example`; verify against `lib/sx-evm/deployments/ethereum.json` before use — the sx-evm address books are named by network, e.g. `sepolia.json`, not by chain id):
 
 - `OZ Votes` strategy — `0x2c8631584474E750CEdF2Fb6A904f2e84777Aefe`
 - `Proposition power` validation — `0x6D9d6D08EF6b26348Bd18F1FC8D953696b7cf311`
@@ -225,10 +229,10 @@ for TX in <exec-strategy-tx> <space-tx>; do
 done
 ```
 
-Match `implementation` against the canonical SX impls (from `.env.example` or `lib/sx-evm/deployments/<chainId>.json`) to know which tx produced which proxy:
+Match `implementation` against the canonical SX implementations in `lib/sx-evm/deployments/<network>.json` (`ethereum.json` on mainnet) to know which tx produced which proxy. These implementation addresses are not in `.env.example`:
 
-- `implementation` == the Space impl address on that chain → `proxy` is your **`PHASE2_SPACE_ADDRESS`**.
-- `implementation` == `SX_AVATAR_IMPL` (or `SX_TIMELOCK_IMPL` when `TIMELOCK_ENABLED=true`) → `proxy` is your **`PHASE2_EXEC_STRATEGY_ADDRESS`**.
+- `implementation` == `SpaceImplementation` → `proxy` is your **`PHASE2_SPACE_ADDRESS`**.
+- `implementation` == `AvatarExecutionStrategyImplementation` (or `TimelockExecutionStrategyImplementation` when `TIMELOCK_ENABLED=true`) → `proxy` is your **`PHASE2_EXEC_STRATEGY_ADDRESS`**.
 
 If you only have one of the two tx hashes, the other is the sender's tx at nonce ±1 — the explorer's "Transactions" tab for the sender shows both back-to-back.
 
